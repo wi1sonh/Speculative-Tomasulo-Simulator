@@ -1,0 +1,463 @@
+<!-- 网页前端 -->
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <title>Speculative Tomasulo Simulator</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="./lib/css/bootstrap.min.css" rel="stylesheet">
+    <script src="./lib/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="./lib/fonts/bootstrap-icons.css">
+    <style>
+        #app-nav {
+            background: rgba(248,249,250,0.7);
+            -webkit-backdrop-filter: blur(5px);
+            backdrop-filter: blur(5px);
+        }
+        .reg-cell{
+            min-height: 1.5em;
+            height: 1.5em
+        }
+    </style>
+    <script src="simulate.js"></script>
+    <script src="app.js"></script>
+</head>
+
+<body>
+
+<nav class="navbar sticky-top" id="app-nav">
+    <div class="container-fluid">
+        <h1 class="navbar-brand ms-3">
+            Speculative Tomasulo Simulator
+        </h1>
+        <span>Clock：<span id="clockNum" class="font-weight-bold">--</span></span>
+        <!-- TODO -->
+        <span>CLI：<span id="clockNum" class="font-weight-bold">--</span></span>
+        <span>PC：<span id="clockNum" class="font-weight-bold">--</span></span>
+        <span>Instructions：<span id="clockNum" class="font-weight-bold">--</span></span>
+        <span>CPI：<span id="clockNum" class="font-weight-bold">--</span></span>
+        <!-- TODO -->
+        <div class="btn-group me-3" role="group">
+            <button type="button" class="btn btn-success disabled" id="continue">
+                <i class="bi bi-skip-forward me-1"></i>Continue
+            </button>
+            <button type="button" class="btn btn-warning disabled" id="pause">
+                <i class="bi bi-pause me-1"></i>Pause
+            </button>
+            <button type="button" class="btn btn-danger disabled" id="reset">
+                <i class="bi bi-stop me-1"></i>Reset
+            </button>
+        </div>
+    </div>
+</nav>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" id="end-toast">
+        <div class="toast-header">
+            <strong class="me-auto">Notification</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body">
+            Speculative Tomasulo算法已演示完毕！请输入新的指令以开始下一轮演示！
+        </div>
+    </div>
+</div>
+
+
+<div class="my-4"></div>
+<div class="row">
+    <!-- 输入模块 -->
+    <div class="col-md-4 offset-md-1">
+        <div class="row">
+
+            <div class="col-md-7">
+                <h3 class="text-left my-2">New Instructions</h3>
+            </div>
+
+
+            <div class="col-md-2">
+                <input id="fileInput" type="file" accept="text/*" />
+            </div>
+
+            <div class="col-md-4">
+                <div class="disabled-btn-wrapper" tabindex="0" data-toggle="tooltip" data-placement="bottom" title="加载当前文本框内指令">
+                    <button type="button" class="btn btn-success my-2" id="load">
+                        <i class="bi bi-play"></i>Load
+                    </button>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="disabled-btn-wrapper" tabindex="0" data-toggle="tooltip" data-placement="bottom" title="选择并读取文件内容到文本框">
+                    <button type="button" class="btn btn-warning my-2" id="save">
+                        <i class="bi bi-play"></i>保存结果到本地
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="row">
+            <textarea class="form-control" style="width: 100%; height: 15em; margin: auto"
+                      id="new_instructions" autofocus></textarea>
+            <label for="new_instructions" class="invisible">Instructions</label>
+            <textarea class="form-control" style="width: 100%; height: 20em; margin: auto"
+                      id="output" autofocus></textarea>
+            <label for="output" class="invisible">Output</label>
+        </div>
+    </div>
+
+    <!-- 尚未加载的指令列表 -->
+    <div class="col-md-4 offset-md-2">
+        <div class="row">
+            <h3 class="text-center my-2">Unloaded Instructions
+                <span class="ms-1" data-bs-toggle="tooltip" data-bs-placement="right"
+                      title="尚未加载的指令列表，将要加载从上向下数的第一条"><i
+                        class="bi bi-question-circle h-75 w-75" style="font-size:60%"></i>
+                </span>
+            </h3>
+        </div>
+        <div class="row" style="height: 15em; overflow: auto;" id="all_instructions">
+            <div id="unloaded_instruction_placeholder">
+                <p class="text-center align-middle text-secondary">请点击Load按钮加载指令，这里才会显示内容</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<hr/>
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- 重排序缓存ROB -->
+        <div class="col-md-6">
+            <h3 class="text-center my-2 py-1">Reorder Buffer
+                <span class="ms-1" data-bs-toggle="tooltip" data-bs-placement="right"
+                      title="重排序缓存（Reorder Buffer，即ROB）"><i class="bi bi-question-circle h-75 w-75"
+                                                              style="font-size:60%"></i>
+                </span>
+            </h3>
+            <div class="table-display-area" style="height: 350px; overflow: auto">
+                <table class="table table-hover table-striped table-bordered thead-light">
+                    <thead>
+                    <tr>
+                        <th class="col-md-2" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="指针，指出 ROB 的头和尾">
+                        </th>
+                        <th class="col-md-1" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="ROB在每条指令发射的时候也会为其分配一个编号，这个编号正好可以取代保留站编号起到了寄存器重命名的作用">Entry
+                        </th>
+                        <th class="col-md-1" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="指示某一行是否正保存有指令">Busy
+                        </th>
+                        <th class="col-md-3" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            data-bs-html="true"
+                            title="指令">Instruction
+                        </th>
+                        <th class="col-md-1" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            data-bs-html="true"
+                            title="指示保存的指令当前的运行情况，从而判断某条指令是否可以提交">State
+                        </th>
+                        <th class="col-md-1" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            data-bs-html="true"
+                            title="指示指令的目的寄存器">Destination
+                        </th>
+                        <th class="col-md-2 scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            data-bs-html="true"
+                            title="保存指令的结果，当指令可以提交，就直接提交Value到逻辑寄存器；另外，在一条指令执行完毕但还不能提交时，后序指令有可能从ROB中读取Value">Value
+                        </th>
+                    </tr>
+                    </thead>
+                    <tbody id="reorder_buffer" class="table-group-divider">
+
+                        <tr id="E1">
+                            <td id="E1_Pointer" class="E1_Pointer" align="right"></td>
+                            <td id="E1_Entry" class="E1_Entry" align="center">1</td>
+                            <td id="E1_Busy" class="E1_Busy">No</td>
+                            <td id="E1_Instruction" class="E1_Instruction"></td>
+                            <td id="E1_State" class="E1_State"></td>
+                            <td id="E1_Destination" class="E1_Destination"></td>
+                            <td id="E1_Value" class="E1_Value"></td>
+                        </tr>
+                        <tr id="E2">
+                            <td id="E2_Pointer" class="E2_Pointer" align="right"></td>
+                            <td id="E2_Entry" class="E2_Entry" align="center">2</td>
+                            <td id="E2_Busy" class="E2_Busy">No</td>
+                            <td id="E2_Instruction" class="E2_Instruction"></td>
+                            <td id="E2_State" class="E2_State"></td>
+                            <td id="E2_Destination" class="E2_Destination"></td>
+                            <td id="E2_Value" class="E2_Value"></td>
+                        </tr>
+                        <tr id="E3">
+                            <td id="E3_Pointer" class="E3_Pointer" align="right"></td>
+                            <td id="E3_Entry" class="E3_Entry" align="center">3</td>
+                            <td id="E3_Busy" class="E3_Busy">No</td>
+                            <td id="E3_Instruction" class="E3_Instruction"></td>
+                            <td id="E3_State" class="E3_State"></td>
+                            <td id="E3_Destination" class="E3_Destination"></td>
+                            <td id="E3_Value" class="E3_Value"></td>
+                        </tr>
+                        <tr id="E4">
+                            <td id="E4_Pointer" class="E4_Pointer" align="right"></td>
+                            <td id="E4_Entry" class="E4_Entry" align="center">4</td>
+                            <td id="E4_Busy" class="E4_Busy">No</td>
+                            <td id="E4_Instruction" class="E4_Instruction"></td>
+                            <td id="E4_State" class="E4_State"></td>
+                            <td id="E4_Destination" class="E4_Destination"></td>
+                            <td id="E4_Value" class="E4_Value"></td>
+                        </tr>
+                        <tr id="E5">
+                            <td id="E5_Pointer" class="E5_Pointer" align="right"></td>
+                            <td id="E5_Entry" class="E5_Entry" align="center">5</td>
+                            <td id="E5_Busy" class="E5_Busy">No</td>
+                            <td id="E5_Instruction" class="E5_Instruction"></td>
+                            <td id="E5_State" class="E5_State"></td>
+                            <td id="E5_Destination" class="E5_Destination"></td>
+                            <td id="E5_Value" class="E5_Value"></td>
+                        </tr>
+                        <tr id="E6">
+                            <td id="E6_Pointer" class="E6_Pointer" align="right"></td>
+                            <td id="E6_Entry" class="E6_Entry" align="center">6</td>
+                            <td id="E6_Busy" class="E6_Busy">No</td>
+                            <td id="E6_Instruction" class="E6_Instruction"></td>
+                            <td id="E6_State" class="E6_State"></td>
+                            <td id="E6_Destination" class="E6_Destination"></td>
+                            <td id="E6_Value" class="E6_Value"></td>
+                        </tr>
+
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 保留站 -->
+        <div class="col-md-6">
+            <h3 class="text-center my-2 py-1">Reservation Stations
+                <span class="ms-1" data-bs-toggle="tooltip" data-bs-placement="right"
+                      title="保留站的结构有点像cache，可能有多行数据，每一行都对应一条被发射到保留站的指令"><i class="bi bi-question-circle h-75 w-75"
+                                                              style="font-size:60%"></i>
+                </span>
+            </h3>
+            <div class="table-display-area" style="height: 350px; overflow: auto">
+                <table class="table table-hover table-striped table-bordered thead-light">
+                    <thead>
+                    <tr>
+                        <th class="col-md-1" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="单元名">Name
+                        </th>
+                        <th class="col-md-1" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            data-bs-html="true"
+                            title="指示这一行是否现存有指令">Busy
+                        </th>
+                        <th class="col-md-2" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            data-bs-html="true"
+                            title="操作数">Op
+                        </th>
+                        <th class="col-md-2" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            data-bs-html="true"
+                            title="直接把能读取的源寄存器 1 的数据直接拷贝到保留站中">Vj
+                        </th>
+                        <th class="col-md-2" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="直接把能读取的源寄存器 2 的数据直接拷贝到保留站中">Vk
+                        </th>
+                        <th class="col-md-1" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="记录尚不能读取的源寄存器 1 的数据将由哪条指令算出">Qj
+                        </th>
+                        <th class="col-md-1" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="记录尚不能读取的源寄存器 2 的数据将由哪条指令算出">Qk
+                        </th>
+                        <th class="col-md-1" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="存储指令的地址，用于存放立即数和计算得到的地址数据">A
+                        </th>
+                        <th class="col-md-1" scope="col" data-bs-toggle="tooltip" data-bs-placement="top"
+                            data-bs-html="true"
+                            title="目的寄存器">Dest
+                        </th>
+                    </tr>
+                    </thead>
+                    <tbody id="reservation_stations" class="table-group-divider">
+                        <tr id="Load1">
+                            <td align="center">Load1</td>
+                            <td id="Load1_Busy" class="Load1_Busy">No</td>
+                            <td id="Load1_Op" class="Load1_Op"></td>
+                            <td id="Load1_Vj" class="Load1_Vj"></td>
+                            <td id="Load1_Vk" class="Load1_Vk"></td>
+                            <td id="Load1_Qj" class="Load1_Qj"></td>
+                            <td id="Load1_Qk" class="Load1_Qk"></td>
+                            <td id="Load1_A" class="Load1_A"></td>
+                            <td id="Load1_Dest" class="Load1_Dest"></td>
+                        </tr>
+                        <tr id="Load2">
+                            <td align="center">Load2</td>
+                            <td id="Load2_Busy" class="Load2_Busy">No</td>
+                            <td id="Load2_Op" class="Load2_Op"></td>
+                            <td id="Load2_Vj" class="Load2_Vj"></td>
+                            <td id="Load2_Vk" class="Load2_Vk"></td>
+                            <td id="Load2_Qj" class="Load2_Qj"></td>
+                            <td id="Load2_Qk" class="Load2_Qk"></td>
+                            <td id="Load2_A" class="Load2_A"></td>
+                            <td id="Load2_Dest" class="Load2_Dest"></td>
+                        </tr>
+                        <tr id="Add1">
+                            <td align="center">Add1</td>
+                            <td id="Add1_Busy" class="Add1_Busy">No</td>
+                            <td id="Add1_Op" class="Add1_Op"></td>
+                            <td id="Add1_Vj" class="Add1_Vj"></td>
+                            <td id="Add1_Vk" class="Add1_Vk"></td>
+                            <td id="Add1_Qj" class="Add1_Qj"></td>
+                            <td id="Add1_Qk" class="Add1_Qk"></td>
+                            <td id="Add1_A" class="Add1_A"></td>
+                            <td id="Add1_Dest" class="Add1_Dest"></td>
+                        </tr>
+                        <tr id="Add2">
+                            <td align="center">Add2</td>
+                            <td id="Add2_Busy" class="Add2_Busy">No</td>
+                            <td id="Add2_Op" class="Add2_Op"></td>
+                            <td id="Add2_Vj" class="Add2_Vj"></td>
+                            <td id="Add2_Vk" class="Add2_Vk"></td>
+                            <td id="Add2_Qj" class="Add2_Qj"></td>
+                            <td id="Add2_Qk" class="Add2_Qk"></td>
+                            <td id="Add2_A" class="Add2_A"></td>
+                            <td id="Add2_Dest" class="Add2_Dest"></td>
+                        </tr>
+                        <tr id="Add3">
+                            <td align="center">Add3</td>
+                            <td id="Add3_Busy" class="Add3_Busy">No</td>
+                            <td id="Add3_Op" class="Add3_Op"></td>
+                            <td id="Add3_Vj" class="Add3_Vj"></td>
+                            <td id="Add3_Vk" class="Add3_Vk"></td>
+                            <td id="Add3_Qj" class="Add3_Qj"></td>
+                            <td id="Add3_Qk" class="Add3_Qk"></td>
+                            <td id="Add3_A" class="Add3_A"></td>
+                            <td id="Add3_Dest" class="Add3_Dest"></td>
+                        </tr>
+                        <tr id="Mult1">
+                            <td align="center">Mult1</td>
+                            <td id="Mult1_Busy" class="Mult1_Busy">No</td>
+                            <td id="Mult1_Op" class="Mult1_Op"></td>
+                            <td id="Mult1_Vj" class="Mult1_Vj"></td>
+                            <td id="Mult1_Vk" class="Mult1_Vk"></td>
+                            <td id="Mult1_Qj" class="Mult1_Qj"></td>
+                            <td id="Mult1_Qk" class="Mult1_Qk"></td>
+                            <td id="Mult1_A" class="Mult1_A"></td>
+                            <td id="Mult1_Dest" class="Mult1_Dest"></td>
+                        </tr>
+                        <tr id="Mult2">
+                            <td align="center">Mult2</td>
+                            <td id="Mult2_Busy" class="Mult2_Busy">No</td>
+                            <td id="Mult2_Op" class="Mult2_Op"></td>
+                            <td id="Mult2_Vj" class="Mult2_Vj"></td>
+                            <td id="Mult2_Vk" class="Mult2_Vk"></td>
+                            <td id="Mult2_Qj" class="Mult2_Qj"></td>
+                            <td id="Mult2_Qk" class="Mult2_Qk"></td>
+                            <td id="Mult2_A" class="Mult2_A"></td>
+                            <td id="Mult2_Dest" class="Mult2_Dest"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+
+    </div>
+</div>
+
+
+<div class="container-fluid">
+    <div class="row">
+
+        <!-- 寄存器结果状态 -->
+        <div class="col-md-12 table-responsive">
+            <h3 class="text-center my-2 py-1">Registers Status
+                <span class="ms-1" data-bs-toggle="tooltip" data-bs-placement="right"
+                    title="寄存器结果状态。主要记录对于某一个寄存器是否有部件正准备写入数据"><i
+                        class="bi bi-question-circle h-75 w-75" style="font-size:60%"></i>
+                </span>
+            </h3>
+            <div class="row">
+                <table class="table table-hover table-striped table-bordered">
+                    <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>R0</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th><th>R5</th><th>R6</th><th>R7</th>
+                        <th>R8</th><th>R9</th><th>R10</th><th>R11</th><th>R12</th><th>R13</th><th>R14</th><th>R15</th>
+                        <th>R16</th><th>R17</th><th>R18</th><th>R19</th><th>R20</th><th>R21</th><th>R22</th><th>R23</th>
+                        <th>R24</th><th>R25</th><th>R26</th><th>R27</th><th>R28</th><th>R29</th><th>R30</th><th>R31</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>Reorder #</td>
+                        <td id="R0_Reorder" class="reg-cell"></td><td id="R1_Reorder" class="reg-cell"></td><td id="R2_Reorder" class="reg-cell"></td><td id="R3_Reorder" class="reg-cell"></td>
+                        <td id="R4_Reorder" class="reg-cell"></td><td id="R5_Reorder" class="reg-cell"></td><td id="R6_Reorder" class="reg-cell"></td><td id="R7_Reorder" class="reg-cell"></td>
+                        <td id="R8_Reorder" class="reg-cell"></td><td id="R9_Reorder" class="reg-cell"></td><td id="R10_Reorder" class="reg-cell"></td><td id="R11_Reorder" class="reg-cell"></td>
+                        <td id="R12_Reorder" class="reg-cell"></td><td id="R13_Reorder" class="reg-cell"></td><td id="R14_Reorder" class="reg-cell"></td><td id="R15_Reorder" class="reg-cell"></td>
+                        <td id="R16_Reorder" class="reg-cell"></td><td id="R17_Reorder" class="reg-cell"></td><td id="R18_Reorder" class="reg-cell"></td><td id="R19_Reorder" class="reg-cell"></td>
+                        <td id="R20_Reorder" class="reg-cell"></td><td id="R21_Reorder" class="reg-cell"></td><td id="R22_Reorder" class="reg-cell"></td><td id="R23_Reorder" class="reg-cell"></td>
+                        <td id="R24_Reorder" class="reg-cell"></td><td id="R25_Reorder" class="reg-cell"></td><td id="R26_Reorder" class="reg-cell"></td><td id="R27_Reorder" class="reg-cell"></td>
+                        <td id="R28_Reorder" class="reg-cell"></td><td id="R29_Reorder" class="reg-cell"></td><td id="R30_Reorder" class="reg-cell"></td><td id="R31_Reorder" class="reg-cell"></td>
+                    </tr>
+                    <tr>
+                        <td>Busy</td>
+                        <td id="R0_Busy" class="reg-cell"></td><td id="R1_Busy" class="reg-cell"></td><td id="R2_Busy" class="reg-cell"></td><td id="R3_Busy" class="reg-cell"></td>
+                        <td id="R4_Busy" class="reg-cell"></td><td id="R5_Busy" class="reg-cell"></td><td id="R6_Busy" class="reg-cell"></td><td id="R7_Busy" class="reg-cell"></td>
+                        <td id="R8_Busy" class="reg-cell"></td><td id="R9_Busy" class="reg-cell"></td><td id="R10_Busy" class="reg-cell"></td><td id="R11_Busy" class="reg-cell"></td>
+                        <td id="R12_Busy" class="reg-cell"></td><td id="R13_Busy" class="reg-cell"></td><td id="R14_Busy" class="reg-cell"></td><td id="R15_Busy" class="reg-cell"></td>
+                        <td id="R16_Busy" class="reg-cell"></td><td id="R17_Busy" class="reg-cell"></td><td id="R18_Busy" class="reg-cell"></td><td id="R19_Busy" class="reg-cell"></td>
+                        <td id="R20_Busy" class="reg-cell"></td><td id="R21_Busy" class="reg-cell"></td><td id="R22_Busy" class="reg-cell"></td><td id="R23_Busy" class="reg-cell"></td>
+                        <td id="R24_Busy" class="reg-cell"></td><td id="R25_Busy" class="reg-cell"></td><td id="R26_Busy" class="reg-cell"></td><td id="R27_Busy" class="reg-cell"></td>
+                        <td id="R28_Busy" class="reg-cell"></td><td id="R29_Busy" class="reg-cell"></td><td id="R30_Busy" class="reg-cell"></td><td id="R31_Busy" class="reg-cell"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="row">
+                <table class="table table-hover table-striped table-bordered">
+                    <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>F0</th><th>F1</th><th>F2</th><th>F3</th><th>F4</th><th>F5</th><th>F6</th><th>F7</th>
+                        <th>F8</th><th>F9</th><th>F10</th><th>F11</th><th>F12</th><th>F13</th><th>F14</th><th>F15</th>
+                        <th>F16</th><th>F17</th><th>F18</th><th>F19</th><th>F20</th><th>F21</th><th>F22</th><th>F23</th>
+                        <th>F24</th><th>F25</th><th>F26</th><th>F27</th><th>F28</th><th>F29</th><th>F30</th><th>F31</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>Reorder #</td>
+                        <td id="F0_Reorder" class="reg-cell"></td><td id="F1_Reorder" class="reg-cell"></td><td id="F2_Reorder" class="reg-cell"></td><td id="F3_Reorder" class="reg-cell"></td>
+                        <td id="F4_Reorder" class="reg-cell"></td><td id="F5_Reorder" class="reg-cell"></td><td id="F6_Reorder" class="reg-cell"></td><td id="F7_Reorder" class="reg-cell"></td>
+                        <td id="F8_Reorder" class="reg-cell"></td><td id="F9_Reorder" class="reg-cell"></td><td id="F10_Reorder" class="reg-cell"></td><td id="F11_Reorder" class="reg-cell"></td>
+                        <td id="F12_Reorder" class="reg-cell"></td><td id="F13_Reorder" class="reg-cell"></td><td id="F14_Reorder" class="reg-cell"></td><td id="F15_Reorder" class="reg-cell"></td>
+                        <td id="F16_Reorder" class="reg-cell"></td><td id="F17_Reorder" class="reg-cell"></td><td id="F18_Reorder" class="reg-cell"></td><td id="F19_Reorder" class="reg-cell"></td>
+                        <td id="F20_Reorder" class="reg-cell"></td><td id="F21_Reorder" class="reg-cell"></td><td id="F22_Reorder" class="reg-cell"></td><td id="F23_Reorder" class="reg-cell"></td>
+                        <td id="F24_Reorder" class="reg-cell"></td><td id="F25_Reorder" class="reg-cell"></td><td id="F26_Reorder" class="reg-cell"></td><td id="F27_Reorder" class="reg-cell"></td>
+                        <td id="F28_Reorder" class="reg-cell"></td><td id="F29_Reorder" class="reg-cell"></td><td id="F30_Reorder" class="reg-cell"></td><td id="F31_Reorder" class="reg-cell"></td>
+                    </tr>
+                    <tr>
+                        <td>Busy</td>
+                        <td id="F0_Busy" class="reg-cell"></td><td id="F1_Busy" class="reg-cell"></td><td id="F2_Busy" class="reg-cell"></td><td id="F3_Busy" class="reg-cell"></td>
+                        <td id="F4_Busy" class="reg-cell"></td><td id="F5_Busy" class="reg-cell"></td><td id="F6_Busy" class="reg-cell"></td><td id="F7_Busy" class="reg-cell"></td>
+                        <td id="F8_Busy" class="reg-cell"></td><td id="F9_Busy" class="reg-cell"></td><td id="F10_Busy" class="reg-cell"></td><td id="F11_Busy" class="reg-cell"></td>
+                        <td id="F12_Busy" class="reg-cell"></td><td id="F13_Busy" class="reg-cell"></td><td id="F14_Busy" class="reg-cell"></td><td id="F15_Busy" class="reg-cell"></td>
+                        <td id="F16_Busy" class="reg-cell"></td><td id="F17_Busy" class="reg-cell"></td><td id="F18_Busy" class="reg-cell"></td><td id="F19_Busy" class="reg-cell"></td>
+                        <td id="F20_Busy" class="reg-cell"></td><td id="F21_Busy" class="reg-cell"></td><td id="F22_Busy" class="reg-cell"></td><td id="F23_Busy" class="reg-cell"></td>
+                        <td id="F24_Busy" class="reg-cell"></td><td id="F25_Busy" class="reg-cell"></td><td id="F26_Busy" class="reg-cell"></td><td id="F27_Busy" class="reg-cell"></td>
+                        <td id="F28_Busy" class="reg-cell"></td><td id="F29_Busy" class="reg-cell"></td><td id="F30_Busy" class="reg-cell"></td><td id="F31_Busy" class="reg-cell"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+
+    </div>
+</div>
+
+
+</body>
+</html>
